@@ -9,6 +9,7 @@ from app.modules.patients.repository import PatientRepository
 from app.modules.audit.service import AuditService
 from app.models.audit_log import AuditAction
 from app.core.exceptions import (
+    EMRException,
     NotFoundException,
     PermissionDeniedException,
 )
@@ -110,8 +111,9 @@ class MedicalRecordService:
 
         # Нельзя редактировать финальную запись
         if record.status == RecordStatus.FINAL and data.status != RecordStatus.AMENDED:
-            raise PermissionDeniedException(
-                "Cannot edit a finalized record. Set status to 'amended' first"
+            raise EMRException(
+                "Cannot edit a finalized record. Set status to 'amended' first",
+                status_code=400
             )
 
         update_data = data.model_dump(exclude_unset=True)
