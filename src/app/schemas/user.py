@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, field_validator
 from uuid import UUID
 from datetime import datetime
 from app.models.user import UserRole
@@ -7,10 +7,17 @@ import re
 
 
 class UserBase(BaseModel):
-    email: EmailStr
+    email: str
     first_name: str
     last_name: str
     role: UserRole = UserRole.RECEPTIONIST
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        if "@" not in v or "." not in v.split("@")[-1]:
+            raise ValueError("Invalid email format")
+        return v.lower()
 
 
 class UserCreate(UserBase):

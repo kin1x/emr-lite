@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from uuid import UUID
 from datetime import date, datetime
 from typing import Optional
@@ -15,7 +15,7 @@ class PatientBase(BaseModel):
     allergies: Optional[str] = None
     chronic_conditions: Optional[str] = None
     phone: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     address: Optional[str] = None
 
 
@@ -33,7 +33,7 @@ class PatientUpdate(BaseModel):
     allergies: Optional[str] = None
     chronic_conditions: Optional[str] = None
     phone: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     address: Optional[str] = None
 
 
