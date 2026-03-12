@@ -1,8 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from datetime import timedelta
+from uuid import UUID
 
-from app.models.user import User, UserRole
+from app.models.user import User
 from app.schemas.user import UserCreate
 from app.core.security import (
     hash_password,
@@ -13,6 +13,7 @@ from app.core.security import (
 )
 from app.core.redis import redis_client
 from app.core.config import settings
+from sqlalchemy.exc import IntegrityError
 from app.core.exceptions import (
     AlreadyExistsException,
     UnauthorizedException,
@@ -25,7 +26,6 @@ class AuthService:
         self.db = db
 
     async def register(self, data: UserCreate) -> User:
-        # Проверяем уникальность email
         result = await self.db.execute(
             select(User).where(User.email == data.email)
         )
@@ -41,8 +41,12 @@ class AuthService:
             role=data.role,
         )
         self.db.add(user)
-        await self.db.flush()
-        await self.db.refresh(user)
+        try:
+            await self.db.flush()
+            await self.db.refresh(user)
+        except IntegrityError:
+            await self.db.rollback()
+            raise AlreadyExistsException(f"User with email '{data.email}'")
         return user
 
     async def login(self, email: str, password: str) -> dict:
@@ -60,7 +64,6 @@ class AuthService:
         access_token = create_access_token(subject=str(user.id))
         refresh_token = create_refresh_token(subject=str(user.id))
 
-        # Сохраняем refresh токен в Redis
         await redis_client.set(
             key=f"refresh:{user.id}",
             value=refresh_token,
@@ -86,20 +89,17 @@ class AuthService:
 
         user_id = payload.get("sub")
 
-        # Проверяем что refresh токен совпадает с сохранённым в Redis
         stored_token = await redis_client.get(f"refresh:{user_id}")
         if not stored_token or stored_token != refresh_token:
             raise UnauthorizedException("Refresh token is invalid or revoked")
 
-        # Проверяем пользователя
         result = await self.db.execute(
-            select(User).where(User.id == user_id)
+            select(User).where(User.id == str(user_id))
         )
         user = result.scalar_one_or_none()
         if not user or not user.is_active:
             raise UnauthorizedException("User not found or disabled")
 
-        # Выдаём новые токены (rotation)
         new_access_token = create_access_token(subject=str(user.id))
         new_refresh_token = create_refresh_token(subject=str(user.id))
 
@@ -116,18 +116,16 @@ class AuthService:
         }
 
     async def logout(self, user: User, access_token: str) -> None:
-        # Добавляем access токен в blacklist
         await redis_client.set(
             key=f"blacklist:{access_token}",
             value="1",
             expire=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         )
-        # Удаляем refresh токен
         await redis_client.delete(f"refresh:{user.id}")
 
     async def get_user_by_id(self, user_id: str) -> User:
         result = await self.db.execute(
-            select(User).where(User.id == user_id)
+            select(User).where(User.id == str(user_id))
         )
         user = result.scalar_one_or_none()
         if not user:

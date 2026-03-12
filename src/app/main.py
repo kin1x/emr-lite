@@ -13,22 +13,18 @@ from app.api.v1.router import api_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
     setup_logging()
     logger.info("Starting EMR-Lite", version=settings.APP_VERSION, env=settings.APP_ENV)
 
-    # Подключаем Redis
     await redis_client.connect()
     logger.info("Redis connected")
 
-    # Создаём таблицы (в продакшене — через Alembic миграции)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables ready")
 
     yield
 
-    # Shutdown
     await redis_client.disconnect()
     await engine.dispose()
     logger.info("EMR-Lite shutdown complete")
@@ -56,7 +52,6 @@ Audit Log - полное логирование всех действий
         lifespan=lifespan,
     )
 
-    # CORS
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.ALLOWED_ORIGINS,
@@ -65,7 +60,6 @@ Audit Log - полное логирование всех действий
         allow_headers=["*"],
     )
 
-    # Глобальный обработчик кастомных исключений
     @app.exception_handler(EMRException)
     async def emr_exception_handler(request: Request, exc: EMRException):
         return JSONResponse(
@@ -73,19 +67,19 @@ Audit Log - полное логирование всех действий
             content={"detail": exc.message},
         )
 
-    # Глобальный обработчик непредвиденных ошибок
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
+        # Пропускаем EMRException — он обрабатывается выше
+        if isinstance(exc, EMRException):
+            return await emr_exception_handler(request, exc)
         logger.error("Unhandled exception", error=str(exc), path=request.url.path)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": "Internal server error"},
         )
 
-    # Подключаем роутеры
     app.include_router(api_router)
 
-    # Health check
     @app.get("/health", tags=["System"], summary="Health check")
     async def health_check():
         return {
