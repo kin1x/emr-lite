@@ -1,0 +1,77 @@
+version: '3.9'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.dev
+    container_name: emr_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - emr_network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: emr_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-emr_lite}
+      POSTGRES_USER: ${POSTGRES_USER:-emr_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-emr_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-emr_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - emr_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: emr_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - emr_network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: emr_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@emr.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - emr_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  emr_network:
+    driver: bridge
