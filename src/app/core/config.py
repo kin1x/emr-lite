@@ -7,6 +7,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",  # <-- игнорируем лишние поля из .env
     )
 
     # App
@@ -22,16 +23,20 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://emr_user:emr_password@localhost:5432/emr_lite"
+    DATABASE_URL: str = "postgresql+asyncpg://emr_user:emr_password@postgres:5432/emr_lite"
 
     # Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_URL: str = "redis://redis:6379/0"
 
     # CORS
-    ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8000"]
+    ALLOWED_ORIGINS_STR: str = "http://localhost:3000,http://localhost:8000"
 
     # Logging
     LOG_LEVEL: str = "INFO"
+
+    @property
+    def ALLOWED_ORIGINS(self) -> List[str]:
+        return [origin.strip() for origin in self.ALLOWED_ORIGINS_STR.split(",")]
 
 
 settings = Settings()

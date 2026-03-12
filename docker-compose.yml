@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   app:
     build:
@@ -12,6 +10,10 @@ services:
       - ./src:/app/src
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://emr_user:emr_password@postgres:5432/emr_lite
+      - REDIS_URL=redis://redis:6379/0
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8000
     depends_on:
       postgres:
         condition: service_healthy
